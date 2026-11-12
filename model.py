@@ -94,7 +94,7 @@ class HIST(nn.Module):
         stock_to_concept = stock_to_concept / stock_to_concept_sum
         hidden = torch.t(stock_to_concept).mm(x_hidden)
         
-        hidden = hidden[hidden.sum(1)!=0]
+        hidden = hidden[(hidden != 0).any(dim=1)]
         stock_to_concept = x_hidden.mm(torch.t(hidden))
         # stock_to_concept = cal_cos_similarity(x_hidden, hidden)
         stock_to_concept = self.softmax_s2t(stock_to_concept)
@@ -129,7 +129,7 @@ class HIST(nn.Module):
         h_stock_to_concept = h_stock_to_concept * mask
         h_stock_to_concept = h_stock_to_concept + torch.diag_embed((h_stock_to_concept.sum(0)!=0).float()*diag)
         hidden = torch.t(h_shared_info).mm(h_stock_to_concept).t()
-        hidden = hidden[hidden.sum(1)!=0]
+        hidden = hidden[(hidden != 0).any(dim=1)]
 
         h_concept_to_stock = cal_cos_similarity(h_shared_info, hidden)
         h_concept_to_stock = self.softmax_t2s(h_concept_to_stock)
