@@ -11,6 +11,7 @@ import torch
 from torch import nn
 
 from model import HIST
+from utils import cal_cos_similarity
 
 
 class FixedEncoder(nn.Module):
@@ -66,6 +67,37 @@ class ConceptFilteringTests(unittest.TestCase):
         model = aggregation_model(torch.tensor([[1., 0.]]))
         actual = aggregate_input(model, model.fc_ps, torch.tensor([[1., 0.]]))
         torch.testing.assert_close(actual, torch.tensor([[1., 0.]]))
+
+
+class DiagonalRestorationTests(unittest.TestCase):
+    def test_signed_incoming_connections_do_not_cancel_column_activity(self):
+        residual = torch.tensor([[1., 0.], [0.5, 0.75**0.5], [-0.5, 0.75**0.5]])
+        model = aggregation_model(residual, k=3)
+        with patch("model.cal_cos_similarity", wraps=cal_cos_similarity) as cosine:
+            aggregate_input(model, model.fc_hs, torch.ones(3, 1))
+        # Third cosine call receives the real hidden concept embeddings. Including
+        # the first stock's self-weight gives [1.5,0]; algebraic column sum misses it.
+        hidden = cosine.call_args_list[2].args[1]
+        torch.testing.assert_close(hidden[0], torch.tensor([1.5, 0.]))
+
+    def test_selected_zero_weight_does_not_activate_a_column(self):
+        model = aggregation_model(torch.eye(2), k=2)
+        actual = aggregate_input(model, model.fc_hs, torch.ones(2, 1))
+        # Orthogonal stocks have no nonzero off-diagonal weights, even when selected.
+        torch.testing.assert_close(actual, torch.zeros(2, 2))
+
+    def test_ordinary_forward_and_backward_are_finite(self):
+        torch.manual_seed(17)
+        model = HIST(hidden_size=8, num_layers=1, K=2)
+        x = torch.randn(6, 360, requires_grad=True)
+        membership = torch.rand(6, 3)
+        with patch("torch.get_device", return_value="cpu"):
+            result = model(x, membership, torch.arange(1., 7.))
+        self.assertEqual(result.shape, (6,))
+        self.assertTrue(torch.isfinite(result).all())
+        result.square().mean().backward()
+        self.assertTrue(torch.isfinite(x.grad).all())
+        self.assertTrue(all(torch.isfinite(p.grad).all() for p in model.parameters() if p.grad is not None))
 
 
 if __name__ == "__main__":

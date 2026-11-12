@@ -127,7 +127,7 @@ class HIST(nn.Module):
         mask = torch.zeros([h_stock_to_concept.shape[0], h_stock_to_concept.shape[1]], device = h_stock_to_concept.device)
         mask[row, column] = 1
         h_stock_to_concept = h_stock_to_concept * mask
-        h_stock_to_concept = h_stock_to_concept + torch.diag_embed((h_stock_to_concept.sum(0)!=0).float()*diag)
+        h_stock_to_concept = h_stock_to_concept + torch.diag_embed((h_stock_to_concept != 0).any(dim=0).float()*diag)
         hidden = torch.t(h_shared_info).mm(h_stock_to_concept).t()
         hidden = hidden[(hidden != 0).any(dim=1)]
 
